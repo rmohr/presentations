@@ -1,0 +1,269 @@
+﻿Declarative Extensions for Kubernetes in Go
+
+10:30 3. Jan 2018
+Tags: Kubernetes, controller, declarative, imperative
+
+Roman Mohr
+Principal Software Engineer, Red Hat
+rmohr@redhat.com
+http://kubevirt.io
+@rfenkhuber
+
+* Content
+
+- Imperative interactions with software
+- Declarative interactions with software
+- How do k8 controller work in general?
+- ListWatcher
+- Store
+- Shared Informer
+- Workqueue
+- Controller
+
+* Imperative interactions with software
+
+Let's create a virtual machine with an empty disk via a REST API, the imperative way.
+
+Easy, isn't it?
+
+* Imperative interactions with software
+
+General flow on how to create a VM with the disk
+
+.background statemachine.png
+
+* Imperative interactions with software
+
+Let's introduce the user to the flow
+
+.background statemachine1.png
+
+* Imperative interactions with software
+
+What does the user have to do to get into the desired state?
+
+.background statemachine2.png
+
+* Imperative interactions with software
+
+What about error handling?
+
+.background statemachine3.png
+
+* Imperative interactions with software
+
+Let's start thinking declartive: We can use Ansible!
+
+Wrap the imperative tasks into a role
+
+ ---
+ - become: true
+   become_user: root
+   gather_facts: False
+   tasks:
+   - name: install python 2
+     raw: dnf install -y python2 libselinux-python
+
+Execute the role on a specific host:
+
+ ansible-role python2role -i localhost
+
+With other words: "I want python on my node and I don't care how it gets there".
+
+* Declarative interactions with software
+
+Let's create a virtual machine with an empty disk via a REST API, the declarative way.
+
+* Declarative interactions with software
+
+Let's introduce the operater to the flow.
+
+.background statemachine4.png
+
+* Declarative interactions with software
+
+The user now only has to declare the desired state.
+
+.background statemachine5.png
+
+* Declarative interactions with software
+
+Declarative VM description which can live in GIT:
+ 
+ apiVersion: kubevirt.io/v1alpha1
+ kind: VirtualMachine
+ metadata:
+   name: testvm-ephemeral
+ spec:
+   domain:
+     resources:
+       requests:
+         memory: 64M
+     devices:
+       disks:
+       - name: registrydisk
+         volumeName: registryvolume
+         disk:
+           dev: vda
+   volumes:
+     - name: registryvolume
+       persistentVolumeClaim:
+         claimName: myclaim
+ 
+* Declarative interactions with software
+
+Declarative disk description which can live in GIT:
+
+ kind: PersistentVolumeClaim
+ apiVersion: v1
+ metadata:
+   name: myclaim
+ spec:
+   volumeMode: Block
+   resources:
+     requests:
+       storage: 8Gi
+ 
+* Declarative interactions with software
+
+The operator deals with the complexity related to reaching the state.
+
+.background statemachine6.png
+
+* Declarative interactions with software
+
+Now we engineers have to deal with that complexity!
+
+* How k8s deals with that complexity
+
+* How k8s deals with that complexity
+
+- k8s controllers/operators does *not* process every cluster-state-change.
+
+- Instead k8s guarantees to converge towards the final desired state.
+
+- Controllers have an in-memory view of the cluster state and try to adapt
+
+* ListWatcher
+
+Let's keep up-to-date with what is going on on the cluster.
+
+.code kubernetes-controller.go /LISTWATCHER BEGIN OMIT/,/LISTWATCHER END OMIT/
+
+.background listwatcher.png
+
+* ListWatcher
+
+.code kubernetes-controller.go /LISTWATCHERIMPL BEGIN OMIT/,/LISTWATCHERIMPL END OMIT/
+
+* Store
+
+- Single writer multiple Readers
+- Simple memory based map
+
+.background store.png
+
+* Store
+
+.code kubernetes-controller.go /STORE BEGIN OMIT/,/STORE END OMIT/
+
+* Shared Informer
+
+- Follows a *ListWatcher*
+- Keeps a *Store* up to date
+- Allows registering multiple callbacks
+- Events/changes trigger the callbacks
+- Allows to wait for initial synchronization
+- Does not process every object state (not every state reaches the callbacks)
+
+Even if an informer does not process every document state, it will always
+follow the *ListWatcher* to the latest change.
+
+* Shared Informer
+
+.background sharedinformer.png
+
+* Shared Informer
+
+.code kubernetes-controller.go /SHAREDINFORMER BEGIN OMIT/,/SHAREDINFORMER END OMIT/
+
+* Workqueue
+
+- At first glance a typical queue implementation
+- Collapses added keys to one if they are already present
+- Allows parallel processing of different keys/objects
+- Guarantees locking on currently processed keys
+- Allows reenqueuing in case of errors
+- Allows specifying back-off strategies for reenqueued keys
+- Maintains a reenqueue history which can be queried
+
+* Workqueue
+
+- At first glance a typical queue implementation
+
+.background workqueue.png
+
+* Workqueue
+
+- Collapses added keys to one if they are already present
+
+.background workqueue1.png
+
+* Workqueue
+
+- Allows parallel processing of different keys/objects and tracks processed keys
+
+.background workqueue2.png
+
+* Workqueue
+
+- Provides error handling capabilities (retries and back-off)
+
+.background workqueue3.png
+
+* Workqueue
+
+- Delete the error history on successfully processed items
+
+.background workqueue4.png
+
+* Workqueue
+
+.code kubernetes-controller.go /WORKQUEUE BEGIN OMIT/,/WORKQUEUE END OMIT/
+
+* Controller
+
+- Use a *ListWatcher* and an *Informer*
+- Use the *Callbacks* of an *Informer* to *#Add* the key of a resource in a *Workqueue*
+- Use the *Store* to look up the latest state of the object
+- Dequeued via *#Get* from the *Workqueue*
+- Use *#AddRateLimited* to reprocess a key on errors
+- On successful processing, *#Forget* the error history of the key
+- Use *#Done* to unlock a key for other workers
+
+* Controller
+
+.background controller.png
+
+* Controller
+
+Do's
+
+- Use ListWatchers solely for updating stores
+- Use Stores to get the latest known state of an object
+- Copy opbjects from the store before manipulating them
+- Use informer callbacks to enqueue keys to workqueues
+- Update the object state based on observations on the cluster
+
+Don'ts
+
+- Don't try to reach a state based on ListWatcher events directly
+- Don't try to manipulate the cache directly, let the informer handle that
+- Don't manipulate objects from the store, it will alter the cache too
+- Don't do complex operations in Informer callbacks
+- Don't immediately update object states based on changes you did
+
+* Controller
+
+- https://github.com/kubernetes/community/blob/master/contributors/devel/controllers.md
+- https://github.com/kubernetes/client-go/tree/master/examples/workqueue

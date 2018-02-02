@@ -1,0 +1,115 @@
+﻿Networking Swiss Army Knife for Go
+
+13:00 27 Jan 2018
+Tags: Networking, Golang
+
+Roman Mohr
+Principal Software Engineer, Red Hat
+rmohr@redhat.com
+http://kubevirt.io
+@rfenkhuber
+
+* Content
+
+- Golang and Services
+- Golang and Networking
+- Full Networking Example
+
+
+* Golang and Services
+
+- Easy to marshal and unmarshal data
+
+.play json.go
+
+* Golang and Services
+
+- Easy to write REST-APIs
+
+ ws := new(restful.WebService)
+ ws.
+ 	Path("/users").
+ 	Consumes(restful.MIME_XML, restful.MIME_JSON).
+ 	Produces(restful.MIME_JSON, restful.MIME_XML)
+ 
+ ws.Route(ws.GET("/{user-id}").To(u.findUser).
+ 	Doc("get a user").
+ 	Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+ 	Writes(User{}))		
+ ...
+ 	
+ func (u UserResource) findUser(request *restful.Request, response *restful.Response) {
+ 	id := request.PathParameter("user-id")
+ 	...
+ }
+
+* github.com/vishvananda/netlink
+
+* github.com/vishvananda/netlink
+
+- List interfaces
+
+.play link_list.go
+
+* github.com/vishvananda/netlink
+
+- List addresses
+
+.play addr_list.go
+
+* github.com/vishvananda/netlink
+
+- Create a macvtap device
+
+.play macvtap.go /START OMIT/,/END OMIT/
+
+* github.com/vishvananda/netlink
+
+Let's clone packets via traffic control so that we can analyze the traffic later
+
+- Create two isolated bridges "foo" and "bar"
+- Create a tc filter which replaces DHCP requests from "foo" to "bar"
+
+TODO picture
+
+* github.com/vishvananda/netlink
+
+- Create two isolated bridges "foo" and "bar" and set it to up
+
+.code dhcp.go /BRIDGE START OMIT/,/BRIDGE END OMIT/
+
+* github.com/vishvananda/netlink
+
+- Create an ingress qdisc
+
+.code dhcp.go /QDISC START OMIT/,/QDISC END OMIT/
+
+* github.com/vishvananda/netlink
+
+- Create a tc filter which replaces DHCP traffic to the bridge
+
+.play dhcp.go /TC START OMIT/,/TC END OMIT/
+
+* github.com/google/gopacket
+
+- Start a pcap sniffer
+
+.play sniffer.go /PCAP START OMIT/,/PCAP END OMIT/
+
+OH OH:
+
+ # github.com/google/gopacket/pcap
+ /home/rmohr/go/src/github.com/google/gopacket/pcap/pcap.go:22:18: \
+  fatal error: pcap.h: No such file or directory
+ #include <pcap.h>
+                  ^
+ compilation terminated.
+
+* github.com/mdlayher/ethernet
+
+* vishvananda/netlink
+
+- Routes
+
+* coreos/go-iptables
+
