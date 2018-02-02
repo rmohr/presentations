@@ -1,0 +1,45 @@
+// START MAIN BODY OMIT
+apiVersion: kubevirt.io/v1alpha1
+kind: VirtualMachineReplicaSet
+metadata:
+  name: testreplicaset
+  labels:
+    "kubevirt.io/autoscaler": "" // HL
+  annotations:
+    "kubevirt.io/resourcePods": "110"  // HL
+    "kubevirt.io/resourceStorage": "100G" // HL
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      clusternode: "yes"
+  template:
+    metadata:
+      name: test
+      labels:
+        clusternode: "yes"
+// START SPEC OMIT
+    spec:
+// END MAIN BODY OMIT
+      domain:
+        resources:
+          requests:
+            memory: 5G // HL
+        cpu:
+          cores: 64 // HL
+        devices:
+          disks:
+          - name: bootdisk
+            volumeName: bootdisk
+            disk:
+          - name: initdrive
+            volumeName: initscript
+            disk:
+      volumes:
+        - name: bootdisk
+          registryDisk:
+            image: myfedora:27
+        - name: initscript
+          cloudInitNoCloud:
+            secretRef: clusternode // HL
+// END SPEC OMIT

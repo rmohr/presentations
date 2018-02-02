@@ -1,0 +1,162 @@
+﻿Kubernetes Cluster Autoscaler for Isolated Workloads
+
+13:00 27 Jan 2018
+Tags: Kubernetes, KubeVirt, cluster-autoscaler
+
+Roman Mohr
+Principal Software Engineer, Red Hat
+rmohr@redhat.com
+http://kubevirt.io
+@rfenkhuber
+
+* Content
+
+- How do clouds help you with scaling?
+- How does k8s help you to get more out of your resources?
+- Why do we need the cluster-autoscaler to make the cloud and k8s work together?
+- How and why does KubeVirt bring the autoscaler to your private cloud?
+
+: Hello there I am roman
+
+: First let's see how you can arrange Containers and VMs
+
+* Scaling in the Cloud?
+
+- Scaling per workload unit
+
+.background virtualmachine.png _
+
+* How to scale simple application in the cloud?
+
+- Carve out the resource intensive part and make it a separate component
+- Use a Load Balancer to distribute requests
+- Scale up if we get under pressure
+- Scale down if the pressure is gone
+
+.background webapp.png
+
+* How does GCE/AWS traditionally help you?
+
+- AWS - Auto Scaling Group (Simple/Step/Target Tracking/...)
+- GCE - Managed instance groups (Metrics/Loadbalancer requests/...)
+
+.background load.png
+
+* Making smarter use of your cloud resources?
+
+- A lot of the resources of the workload type you pay for are unused
+- Sharing the workload type you pay for is hard (multi-tenancy)
+- Tight packing is hard without an extra scheduler
+
+.background underutilized.png
+
+* Kubernetes to the rescue
+
+Let's just deploy k8s on GCE or AWS and let k8s schedule our new
+containerized workkloads.
+
+- Allows resource sharing (multi-tenancy)
+- Allows flexible workload sheduling (scheduler)
+- Allows a more app-centric view (microservices)
+
+.background k8s-in-cloud.png
+
+* But wait, don't we forget something? 
+
+Now my autoscalers do not work anymore when k8s scales my webapp!
+
+.background unschedulable.png
+
+* Kubernetes Cluster Autoscaler
+
+- Can be deployed inside the k8s cluster too
+- Agnostic application with cloud-provider-specific plugins
+- Uses Auto Scaling Groups or Managed instance groups to scale
+
+.background cluster-scaler.png
+
+* How it works
+
+- Scans periodically for *unschedulable* worloads on the monitored k8s cluster
+- Scales the base-cloud-provider VM up
+- Gives the new VM some time to register as node
+- Scales down if less resources are needed
+- It does not concern itself with in-k8s load balancing or pod scaling!
+
+* Node templates
+
+In order to do proper reasoning the autoscaler needs to know how a new node
+will look like. It especially needs to know about the nodes
+
+- Labels
+- Taints/Tolerances
+- CPU, memory and storage resources
+
+.code node.yaml
+
+* And can I also use it with my private cloud?
+
+- Currently only backends for public ones like AWS, GCE and Azure exist
+- *and* *one* *for* *KubeVirt* (as POC)
+KubeVirt is a virtualization add-on for Kubernets/OpenShift which allows
+running virtual machines as native workloads side-by-side with Pods on
+*bar-metal* clusters.
+
+.background kubevirt.png
+
+* Kubeadm, Cloud-Init and VirtualMachineReplicaSet
+
+Prepare a VirtualMachineReplicaSet:
+
+.code replicaset.yaml /START MAIN BODY OMIT/,/END MAIN BODY OMIT/
+
+* Kubeadm, Cloud-Init and VirtualMachineReplicaSet
+
+.code replicaset.yaml /START SPEC OMIT/,/END SPEC OMIT/
+
+* Kubeadm, Cloud-Init and VirtualMachineReplicaSet
+
+Let Cloud-Init provision our k8s node with this script in the *clusternode* secret:
+
+.code deploy.sh
+
+* Kubeadm, Cloud-Init and VirtualMachineReplicaSet
+
+Tell the autoscaler how to connect to the base k8s/OpenShift installation:
+
+ [cluster]
+ kubeconfig=/base_kube.cfg
+ server=https://apiserver.override:8664
+
+Start the autoscaler:
+
+ ./cluster-autoscaler \
+   --kubeconfig ./nested_kube.cfg \
+   --cloud-provider kubevirt \
+   --cloud-config config.ini \
+   --node-group-auto-discovery "kubevirt:labels=kubevirt.io/autoscaler" \
+   --expander least-waste
+
+* Use-Case 1: Completely isolated nested clusters
+
+The auto-scaler manages a nested and independend additional cluster.
+
+.background scenario1.png
+
+* Use-Case 2: Isolate parts of your workload
+
+The auto-scaler manages nested nodes of just one cluster, consisting of
+bare-metal and virtualized nodes.
+
+.background scenario2.png
+
+* Links
+
+
+- cluster-autoscaler: https://github.com/kubernetes/autoscaler
+- pod-autoscaler: https://github.com/kubernetes/autoscaler
+- descheduler: https://github.com/kubernetes-incubator/descheduler
+- KubeVirt: https://github.com/kubevirt/kubevirt
+- KubeVirt autoscaler POC: https://github.com/rmohr/autoscaler/pull/1  
+- GCE instance groups: https://cloud.google.com/compute/docs/instance-groups/
+- AWS Auto Scaling Groups: https://docs.aws.amazon.com/autoscaling/ec2/userguide/AutoScalingGroup.html
