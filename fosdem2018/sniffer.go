@@ -17,7 +17,7 @@ type DHCPAck struct {
 func main() {
 
 	// PCAP START OMIT
-	handle, _ := pcap.OpenLive("bar", 65536, true, pcap.BlockForever)
+	handle, _ := pcap.OpenLive("foo", 65536, true, pcap.BlockForever)
 	defer handle.Close()
 
 	src := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)

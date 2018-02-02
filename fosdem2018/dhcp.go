@@ -10,19 +10,16 @@ import (
 func main() {
 
 	// BRIDGE START OMIT
-	for _, name := range []string{"foo", "bar"} {
-		mybridge := &netlink.Bridge{
-			LinkAttrs: netlink.LinkAttrs{Name: name},
-		}
-
-		netlink.LinkAdd(mybridge)
-
-		bridge, _ := netlink.LinkByName(name)
-		netlink.LinkSetUp(bridge)
-		bridge, _ = netlink.LinkByName(name)
+	mybridge := &netlink.Bridge{
+		LinkAttrs: netlink.LinkAttrs{Name: "foo"},
 	}
+
+	netlink.LinkAdd(mybridge)
+
+	bridge, _ := netlink.LinkByName("foo")
+	netlink.LinkSetUp(bridge)
+	bridge, _ = netlink.LinkByName("foo")
 	foo, _ := netlink.LinkByName("foo")
-	bar, _ := netlink.LinkByName("bar")
 
 	mymacvlan := &netlink.Macvlan{
 		LinkAttrs: netlink.LinkAttrs{Name: "test", ParentIndex: foo.Attrs().Index},
@@ -37,7 +34,7 @@ func main() {
 	qdisc := &netlink.Ingress{
 		QdiscAttrs: netlink.QdiscAttrs{
 			Parent:    netlink.HANDLE_INGRESS,
-			LinkIndex: foo.Attrs().Index,
+			LinkIndex: 2,
 			Handle:    netlink.MakeHandle(0xffff, 0),
 		},
 	}
@@ -45,29 +42,29 @@ func main() {
 	// QDISC END OMIT
 
 	// TC START OMIT
-	netlink.SetPromiscOn(bar)
+	netlink.SetPromiscOn(foo)
 
 	selectors := &netlink.TcU32Sel{
 		Flags: netlink.TC_U32_TERMINAL,
-		// match dhcp bar port 67
-		Keys: []netlink.TcU32Key{{Off: 20, Val: 0x00000043, Mask: 0x0000ffff}},
+		// match dhcp  port 68 on device with index 2
+		Keys: []netlink.TcU32Key{{Off: 20, Val: 0x00000044, Mask: 0x0000ffff}},
 	}
 	filter := &netlink.U32{
 		FilterAttrs: netlink.FilterAttrs{
-			LinkIndex: foo.Attrs().Index,
+			LinkIndex: 2,
 			Parent:    netlink.MakeHandle(0xffff, 0),
 			Priority:  1,
 			Protocol:  unix.ETH_P_IP,
 		},
-		Actions: []netlink.Action{netlink.NewMirredAction(bar.Attrs().Index)},
+		Actions: []netlink.Action{netlink.NewMirredAction(foo.Attrs().Index)},
 		Sel:     selectors,
 	}
 	netlink.FilterAdd(filter)
-	out, _ := exec.Command("tc", "filter", "show", "dev", "foo", "ingress").Output()
+	out, _ := exec.Command("tc", "filter", "show", "dev", "enp0s25", "ingress").Output()
 	fmt.Println(string(out))
 	// TC END OMIT
 
+	exec.Command("tc", "filter", "del", "dev", "enp0s25", "parent", "ffff:").Output()
 	netlink.LinkDel(foo)
-	netlink.LinkDel(bar)
 	netlink.LinkDel(mymacvlan)
 }

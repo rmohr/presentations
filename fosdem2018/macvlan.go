@@ -8,16 +8,14 @@ import (
 func main() {
 
 	// START OMIT
-	mymacvlan := &netlink.Macvtap{
-		Macvlan: netlink.Macvlan{
-			LinkAttrs: netlink.LinkAttrs{Name: "foo", ParentIndex: 2},
-			Mode:      netlink.MACVLAN_MODE_BRIDGE,
-		},
+	mymacvlan := &netlink.Macvlan{
+		LinkAttrs: netlink.LinkAttrs{Name: "macvlan0", ParentIndex: 2},
+		Mode:      netlink.MACVLAN_MODE_BRIDGE,
 	}
 
 	netlink.LinkAdd(mymacvlan)
 
-	link, _ := netlink.LinkByName("foo")
+	link, _ := netlink.LinkByName("macvlan0")
 	fmt.Println(link)
 	// END OMIT
 

@@ -11,18 +11,17 @@ http://kubevirt.io
 
 * Content
 
-- Golang and Services
+- Golang and Infrastructure Services
+- Real Networking Example
 - Golang and Networking
-- Full Networking Example
 
-
-* Golang and Services
+* Golang and Infrastructure Services
 
 - Easy to marshal and unmarshal data
 
 .play json.go
 
-* Golang and Services
+* Golang and Infrastructure Services
 
 - Easy to write REST-APIs
 
@@ -43,6 +42,68 @@ http://kubevirt.io
  	...
  }
 
+* Golang and Infrastructure Services
+
+- Have seen that before?
+
+ # github.com/google/gopacket/pcap
+ /home/rmohr/go/src/github.com/google/gopacket/pcap/pcap.go:22:18: \
+  fatal error: pcap.h: No such file or directory
+ #include <pcap.h>
+                  ^
+ compilation terminated.
+
+- Bridging the *python/ruby-to-system-gap* with *-devel libraries and gcc is the past now:
+
+ dnf install pcap-devel gcc
+ pip install myfancynetworkingdaemon
+
+* Real Networking Example
+
+I got inspired to this talk by solving the following problem:
+
+- Attach VMs to an existing host network
+- Don't make assumptions about the host network (bridge vs. normal interface)
+- Benefit from delay-reduction of macvtap
+- Don't assume that you have control over DHCP
+- Deliver app in copyable form (single binary)
+
+* Real Networking Example
+
+A usual virtualization networking solution assumes bridges
+
+.background networking.png
+
+* Real Networking Example
+
+Everyone can reach everyone
+
+.background networking1.png
+
+* Real Networking Example
+
+We can use macvtap to remove the bridge assumption
+
+.background networking2.png
+
+* Real Networking Example
+
+Now the host and the guest can't communicate anymore
+
+.background networking3.png
+
+* Real Networking Example
+
+Let's restore the connectivity with an extra route
+
+.background networking4.png
+
+* Real Networking Example
+
+The final plan for a generic solution
+
+.background networking5.png
+
 * github.com/vishvananda/netlink
 
 * github.com/vishvananda/netlink
@@ -59,24 +120,34 @@ http://kubevirt.io
 
 * github.com/vishvananda/netlink
 
-- Create a macvtap device
+- Create a macvlan device
 
-.play macvtap.go /START OMIT/,/END OMIT/
+.play macvlan.go /START OMIT/,/END OMIT/
+
+* github.com/vishvananda/netlink
+
+- Now we have the additional macvlan on the host
+
+.background wip.png
 
 * github.com/vishvananda/netlink
 
 Let's clone packets via traffic control so that we can analyze the traffic later
 
-- Create two isolated bridges "foo" and "bar"
-- Create a tc filter which replaces DHCP requests from "foo" to "bar"
-
-TODO picture
+- Create an isolated bridge "sniffer0"
+- Create a tc filter which replaces DHCP requests from the main interface to "sniffer0"
 
 * github.com/vishvananda/netlink
 
-- Create two isolated bridges "foo" and "bar" and set it to up
+- Create an isolated bridge "sniffer0" and set it to up
 
-.code dhcp.go /BRIDGE START OMIT/,/BRIDGE END OMIT/
+.play bridge.go /BRIDGE START OMIT/,/BRIDGE END OMIT/
+
+* github.com/vishvananda/netlink
+
+- Now we have the bridge "sniffer0" for packet inspection
+
+.background wip1.png
 
 * github.com/vishvananda/netlink
 
@@ -89,6 +160,12 @@ TODO picture
 - Create a tc filter which replaces DHCP traffic to the bridge
 
 .play dhcp.go /TC START OMIT/,/TC END OMIT/
+
+* github.com/vishvananda/netlink
+
+- Now we have the tc rule for packet stealing in place
+
+.background wip2.png
 
 * github.com/google/gopacket
 
@@ -105,11 +182,57 @@ OH OH:
                   ^
  compilation terminated.
 
-* github.com/mdlayher/ethernet
+* github.com/mdlayher/raw
 
-* vishvananda/netlink
+All libpcap does on linux is accessing *AF_LINK*. Let's do that in go:
+*github.com/mdlayher/raw* helps us there.
+
+.play sniffer1.go /RAW START OMIT/,/RAW END OMIT/
+
+* github.com/google/gopacket
+
+.play sniffer1.go /PROCESS START OMIT/,/PROCESS END OMIT/
+
+* github.com/vishvananda/netlink
 
 - Routes
 
-* coreos/go-iptables
+.play route.go /START OMIT/,/END OMIT/
 
+* github.com/vishvananda/netlink
+
+- Now we know how to extract th IP and how to use it for the routes
+
+.background wip3.png
+
+* github.com/mdlayher/raw
+
+We can also write from withing gopacket with the help of
+*github.com/mdlayher/raw*.
+
+.play sniffer1.go /RAW WRITE START OMIT/,/RAW WRITE END OMIT/
+
+* github.com/mdlayher/raw
+
+We finally have all pieces together
+
+.background wip4.png
+
+* Library Overview
+
+Interface manipulation, TC and routes:
+
+- go get github.com/vishvananda/netlink
+
+Packet introspection:
+
+- go get github.com/google/gopacket
+- go get github.com/mdlayher/raw
+
+iptables:
+
+- go get github.com/coreos/ip-tables/iptables
+
+DHCP clients and servers:
+
+- go get github.com/krolaw/dhcp4
