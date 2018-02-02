@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -111,12 +112,15 @@ func OpenLive(ifname string) (*Handle, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Handle{C: c, MTU: iface.MTU}, nil
+	return &Handle{C: c, MTU: iface.MTU, DeviceIndex: iface.Index}, nil
 }
 func (p *Handle) ReadPacketData() (data []byte, ci gopacket.CaptureInfo, err error) {
 	data = make([]byte, p.MTU)
 	n, _, err := p.C.ReadFrom(data) // HL
-	ci = gopacket.CaptureInfo{CaptureLength: n}
+	ci.Timestamp = time.Now()
+	ci.CaptureLength = n
+	ci.Length = n
+	ci.InterfaceIndex = p.DeviceIndex
 	return data, ci, err
 }
 
@@ -134,6 +138,7 @@ func (p *Handle) WritePacketData(data []byte) (err error) {
 // RAW WRITE END OMIT
 
 type Handle struct {
-	C   net.PacketConn
-	MTU int
+	C           net.PacketConn
+	MTU         int
+	DeviceIndex int
 }
