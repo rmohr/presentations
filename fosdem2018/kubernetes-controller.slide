@@ -181,6 +181,8 @@ follow the *ListWatcher* to the latest change.
 
 * Shared Informer
 
+Shared Informer internals:
+
 .background sharedinformer.png
 
 * Shared Informer
@@ -242,6 +244,8 @@ follow the *ListWatcher* to the latest change.
 - Use *#Done* to unlock a key for other workers
 
 * Controller
+
+Putting everything together:
 
 .background controller.png
 
